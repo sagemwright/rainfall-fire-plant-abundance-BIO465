@@ -1,0 +1,459 @@
+---
+title: "Rainfall, Fire, and Plant Abundance"
+output: html_document
+---
+
+###### Michael Cormier, Sage Wright
+##### This Markdown records the R code used to analyze Australian ecological data from the TERN AEKOS data portal.
+##### This data includes above-ground plant and seed abundance for *Trachymene glaucifolia* at 4 sites in the Simpson Desert of Australia. Rainfall measurements are also included. The data ranges in date from 2004 to 2011. The data was collected in an effort to study the influence of fire on the area after a 2001/2002 wild fire. For each site, there are 15 burned plots and 15 unburned plots. The REFORMATED data files are compatible with the code presented here; there is no difference between the two, except that the reformatted data files are already prepared for analysis.
+
+***
+
+##### This is the [Original Data](http://www.aekos.org.au/index.html#/search-results/list/dataset-details-s?datasetId=au.org.aekos.shared.api.model.dataset.SharedSearchResult:115122&q=%5B%7B%22columnNameAekos%22:%22text%22,%22columnNameShared%22:%22text%22,%22operator%22:%22FreeTextBoost%22,%22value%22:%22Simpson%20Desert%22,%22type%22:%22TEXT%22%7D%5D).
+
+##### These are the [Edited Data Files](https://github.com/sagemwright/rainfall-fire-plant-abundance-bio465/blob/master/Reformated-Data.zip) used in this analysis.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+***
+### Data Preparation
+
+#### 1. Load R packages
+
+```{r Load Packages, results="hide", warning=FALSE, message=FALSE}
+library(readr)
+library(stringr)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+```
+
+#### 2. Read the data files
+
+Things to be aware of:  
+ - CS, FR, MC, SS stand for Carlo Shitty, Field River, Main Camp, and South Site plots respectively.  
+ - Rainfall is measured in mm  
+
+```{r Load Data, results="hide", warning=FALSE, message=FALSE}
+CS = read_csv("PLOT_CS.csv")
+FR = read_csv("PLOT_FR.csv")
+MC = read_csv("PLOT_MC.csv")
+SS = read_csv("PLOT_SS.csv")
+allRain = read_csv("All_rain_complete_R.csv")
+```
+
+#### 3. Early Rainfall  
+
+Rainfall measurements begin in May 1995 and end in Sep 2012. Abundance data begins at the beginning of 2004 and ends during 2011.  
+The most recent wildfire at these sites occurred in 2001/2002.  
+Since we have rainfall data before the abundance data was recorded, we calculated the mean of the recorded rainfall measurements at each site for six month periods from 2002 to 2004 in order to understand the rainfall patterns immediately following the wildfire. 
+
+##### Create a data frame of rainfall for the 2 years before *Trachymene glaucifolia* abundance data was recorded
+
+Rainfall measurements will be split into 6 month intervals at each site and averaged.
+
+```{r Pre-study Rainfall}
+# Get rainfall data from 2002 - 2003
+preRainfall = allRain[81:104,] #2002 - 2003
+
+# 6 month means
+CS_1st = mean(preRainfall$`Carlo Shitty`[1:6], na.rm = TRUE)
+CS_2nd = mean(preRainfall$`Carlo Shitty`[7:12], na.rm = TRUE)
+CS_3rd = mean(preRainfall$`Carlo Shitty`[13:18], na.rm = TRUE)
+CS_4th = mean(preRainfall$`Carlo Shitty`[19:24], na.rm = TRUE)
+
+FR_1st = mean(preRainfall$`Field River`[1:6], na.rm = TRUE)
+FR_2nd = mean(preRainfall$`Field River`[7:12], na.rm = TRUE)
+FR_3rd = mean(preRainfall$`Field River`[13:18], na.rm = TRUE)
+FR_4th = mean(preRainfall$`Field River`[19:24], na.rm = TRUE)
+
+MC_1st = mean(preRainfall$`Main Camp`[1:6], na.rm = TRUE)
+MC_2nd = mean(preRainfall$`Main Camp`[7:12], na.rm = TRUE)
+MC_3rd = mean(preRainfall$`Main Camp`[13:18], na.rm = TRUE)
+MC_4th = mean(preRainfall$`Main Camp`[19:24], na.rm = TRUE)
+
+SS_1st = mean(preRainfall$`South Site`[1:6], na.rm = TRUE)
+SS_2nd = mean(preRainfall$`South Site`[7:12], na.rm = TRUE)
+SS_3rd = mean(preRainfall$`South Site`[13:18], na.rm = TRUE)
+SS_4th = mean(preRainfall$`South Site`[19:24], na.rm = TRUE)
+
+### Make a new data frame with early rain info
+earlyRain = data.frame(Date = c("Jan02-Jun02", "Jul02-Dec02", "Jan03-Jun03", "Jul03-Dec03"), 
+                       "Carlo Shitty" = c(CS_1st, CS_2nd, CS_3rd, CS_4th), 
+                       "Field River" = c(FR_1st, FR_2nd, FR_3rd, FR_4th), 
+                       "Main Camp" = c(MC_1st, MC_2nd, MC_3rd, MC_4th),
+                       "South Site" = c(SS_1st, SS_2nd, SS_3rd, SS_4th))
+
+print(earlyRain)
+```
+
+#### 5. Curate the abundance data  
+
+```{r Calculate General Averages}
+## Total Averages
+totalMeans = data.frame(CS$TOTAL_AVERAGE, FR$TOTAL_AVERAGE, MC$TOTAL_AVERAGE, SS$TOTAL_AVERAGE[1:30])
+total_MeanSites = rowMeans(totalMeans, na.rm = TRUE)
+
+### BURNED PLOTS
+## Average Burned 
+burnedMeans = data.frame(CS$TOTAL_BURNED, FR$TOTAL_BURNED, MC$TOTAL_BURNED, SS$TOTAL_BURNED[1:30])
+total_burned_means = rowMeans(burnedMeans)
+
+## Average Seed Abundance Burned
+seed_burnedMeans = data.frame(CS$BURNED_AVERAGE_SEED, FR$BURNED_AVERAGE_SEED, MC$BURNED_AVERAGE_SEED, SS$BURNED_AVERAGE_SEED[1:30])
+total_seed_burned = rowMeans(seed_burnedMeans)
+
+## Average Plant Abundance Burned
+plant_burnedMeans = data.frame(CS$BURNED_AVERAGE, FR$BURNED_AVERAGE, MC$BURNED_AVERAGE, SS$BURNED_AVERAGE[1:30])
+total_plant_burned = rowMeans(plant_burnedMeans)
+
+### UNBURNED PLOTS
+## Average Unburned
+unburnedMeans = data.frame(CS$TOTAL_UNBURNED, FR$TOTAL_UNBURNED, MC$TOTAL_UNBURNED, SS$TOTAL_UNBURNED[1:30])
+total_unburned_means = rowMeans(unburnedMeans)
+
+## Average Seed Abundance
+SA_means = data.frame(CS$AVERAGE_SEED, FR$AVERAGE_SEED, MC$AVERAGE_SEED, SS$AVERAGE_SEED[1:30])
+total_SA_means = rowMeans(SA_means)
+
+## Average Plant Abundance
+PA_means = data.frame(CS$AVERAGES, FR$AVERAGES, MC$AVERAGES, SS$AVERAGES[1:30])
+total_PA_means = rowMeans(PA_means)
+```
+
+#### 6. Alter the format of dates so files can be joined properly
+
+We had to manipulate the date format in each data file so that they were be able to be joined together.
+
+```{r Alter Date Formats}
+allRain_fix <- allRain %>%
+  mutate(X1 = parse_datetime(X1, "%b-%y"))
+CS_fix <- CS %>% 
+  mutate(Date = parse_datetime(Date, "%y-%b"))
+FR_fix <- FR %>% 
+  mutate(Date = parse_datetime(Date, "%y-%b"))
+MC_fix <- MC %>% 
+  mutate(Date = parse_datetime(Date, "%y-%b"))
+SS_fix <- SS %>% 
+  mutate(Date = parse_datetime(Date, "%y-%b"))
+```
+
+
+#### 7. Filter rain fall by region dates
+```{r Filter by Region Dates}
+CS_rain = allRain_fix[which(allRain_fix$X1 %in% CS_fix$Date),]
+FR_rain = allRain_fix[which(allRain_fix$X1 %in% FR_fix$Date),]
+MC_rain = allRain_fix[which(allRain_fix$X1 %in% MC_fix$Date),]
+SS_rain = allRain_fix[which(allRain_fix$X1 %in% SS_fix$Date),]
+```
+
+#### 8. Combine all rain data points and average them
+```{r Average All Rain Data, message=FALSE, results="hide"}
+filteredRain = inner_join(CS_rain, FR_rain) %>% 
+  inner_join(MC_rain) %>% 
+  inner_join(SS_rain)
+
+averageFilteredRain = rowMeans(filteredRain[,2:5], na.rm = TRUE)
+```
+
+***
+### Data Analysis
+
+#### 1. Plot combined rain fall and total average
+```{r General Comparison}
+# Create a temporary data frame for the graph
+total <- data.frame(total_MeanSites, averageFilteredRain)
+
+ggplot(total, aes(x = total_MeanSites, y = averageFilteredRain)) +
+  geom_point(na.rm=TRUE) +
+  ylim(0, 60) +
+  labs(x = "Average Total Plant Abundance", y = "Average Rainfall") +
+  theme_minimal() +
+  theme(axis.title = element_text(size=12), axis.text = element_text(size=10))
+```
+
+Viewing this data, we were able to notice that it took a roughly linear format. For this reason, we decided to use Pearson's correlation test.
+We first conducted a general correlation between average rainfall and average *Trachymene glaucifolia* abundance. 
+We decided to use a one-tailed correlation because
+
+```{r General Correlation}
+general <- cor.test(total_MeanSites, averageFilteredRain, method = "pearson", alternative = "greater")
+print(general)
+```
+
+We then moved forward and calculated the correlation for subcategories of data; primarily a division between unburned plots and burned plots in addition to seed abundance and above-ground plant abundance. There were a total of five initial correlation tests conducted, including the one described above.
+
+#### 2. Initial Correlation Tests
+```{r Initial Correlation Tests}
+## Correlation between rain fall and mean seed abundance
+mean_seed <- cor.test(total_SA_means, averageFilteredRain, method = "pearson", alternative = "greater")
+print(mean_seed)
+
+## Correlation between rain fall and mean aboveground plant abundance
+mean_plant <- cor.test(total_PA_means, averageFilteredRain, method = "pearson", alternative = "greater")
+print(mean_plant)
+
+## Correlation between rainfall and average combined plant abundance at burned sites
+mean_burned <- cor.test(total_burned_means, averageFilteredRain, method = "pearson", alternative = "greater")
+print(mean_burned)
+
+## Correlation between rainfall and average combined plant abundance at unburned sites
+mean_unburned <- cor.test(total_unburned_means, averageFilteredRain, method = "pearson", alternative = "greater")
+print(mean_unburned)
+```
+
+After noticing that there was a statistically significant correlation between rainfall and average combined plant abundance at burned sites, we wanted to see if which was more significantly correlated: seed abundance or aboveground plant abundance.
+
+```{r Burned Correlation Tests}
+## Correlation between rainfall and mean seed abundance at burned sites
+burned_seed <- cor.test(total_seed_burned, averageFilteredRain, method = "pearson", alternative = "greater")
+print(burned_seed)
+
+## Correlation between rainfall and mean aboveground plant abundance at burned sites
+burned_plant <- cor.test(total_plant_burned, averageFilteredRain, method = "pearson", alternative = "greater")
+print(burned_plant)
+```
+
+Here, we can notice that seeds were more strongly correlated with rainfall. We next decided to graph these two significant correlations.
+
+***
+### Graphing Significant Correlations
+```{r Graphing Correlations}
+## Plot rainfall and burned average
+total <- data.frame(total_burned_means, averageFilteredRain)
+ggplot(total, aes(x = total_burned_means, y = averageFilteredRain)) +
+  geom_point(na.rm=TRUE) +
+  ylim(0, 30) +
+  labs(x = "Average Plant Abundance at Burned Sites", y = "Average Rainfall") +
+  theme_minimal() +
+  theme(axis.title = element_text(size=12), axis.text = element_text(size=10))
+
+
+## Plot rainfall and burned seed average
+total <- data.frame(total_seed_burned, averageFilteredRain)
+ggplot(total, aes(x = total_seed_burned, y = averageFilteredRain)) +
+  geom_point(na.rm=TRUE) +
+  labs(x = "Average Seed Abundance at Burned Sites", y = "Average Rainfall") +
+  ylim(0,30) +
+  theme_minimal() +
+  theme(axis.title = element_text(size=12), axis.text = element_text(size=10))
+```
+
+***
+### Multiple Test Correction
+
+We realized it was necessary to run multiple test corrections. We chose the FDR multiple test correction because we felt that the Bonferroni correction would be too stringent for this study.
+
+```{r Multiple Test Correction}
+p_values <- c(general$p.value, mean_seed$p.value, mean_plant$p.value, mean_burned$p.value, mean_unburned$p.value, burned_seed$p.value, burned_plant$p.value)
+
+corrected_p_values <- p.adjust(p_values, method = "fdr", n = length(p_values))
+print(corrected_p_values)
+```
+
+Following the multiple test correction, we noticed that the two values that were significant were no longer below the 0.05 significance threshold. We decided to create combined graphics that would show the relationship between seed abundance, aboveground plant abundance, and rainfall.
+
+***
+### Combined graphics: Seed, plant, and rainfall  
+
+*Data will be log transformed to allow seed abundance, plant abundance, and rain to all fit on the same graph
+
+We started by plotting all of the variables for all four sites. See the attached Markdown file to see the code to reproduce these graphics.
+
+```{r Code to Get Multiple Graphics to Work, echo=FALSE}
+rowMeanDF = data.frame(CS$AVERAGE_SEED, FR$AVERAGE_SEED, MC$AVERAGE_SEED, SS$AVERAGE_SEED[1:30], CS$AVERAGES, FR$AVERAGES, MC$AVERAGES, SS$AVERAGES[1:30])
+
+rowMeanDF_Burned = data.frame(CS$BURNED_AVERAGE_SEED, FR$BURNED_AVERAGE_SEED, MC$BURNED_AVERAGE_SEED, SS$BURNED_AVERAGE_SEED[1:30], CS$BURNED_AVERAGE, FR$BURNED_AVERAGE, MC$BURNED_AVERAGE, SS$BURNED_AVERAGE[1:30])
+
+rowMeanDF_UnBurned = data.frame(CS$UNBURNED_AVERAGE_SEED, FR$UNBURNED_AVERAGE_SEED, MC$UNBURNED_AVERAGE_SEED, SS$UNBURNED_AVERAGE_SEED[1:30], CS$UNBURNED_AVERAGE, FR$UNBURNED_AVERAGE, MC$UNBURNED_AVERAGE, SS$UNBURNED_AVERAGE[1:30])
+```
+
+#### 1. Combined Carlo Shitty seed, plant, and rain. Previous 2 years of rain added 
+```{r Combined Carlo Shitty Graph, warning=FALSE, echo=FALSE}
+df = as.data.frame(cbind(CS$AVERAGE_SEED, CS$AVERAGES))
+df = as.data.frame(cbind(filteredRain$X1,df))
+df = cbind(df, filteredRain$`Carlo Shitty`)
+remove1 = which(is.na(df$V1))
+remove2 = which(is.na(df$V2))
+remove_NA = remove1[which(is.element(remove1,remove2))]
+df = df[-remove_NA,]
+colnames(df) = c("Date","SBCS","CS","CS_Rain")
+df$SBCS = log(df$SBCS + 1)
+df$CS = log(df$CS + 1)
+df$CS_Rain = log(df$CS_Rain + 1)
+
+## 2 extra previous years of rainfall added 
+dates = c(as.character(earlyRain$Date), as.character(df$Date))
+SeedAbun = c(NA, NA, NA, NA, df$SBCS)
+plantAbun = c(NA, NA, NA, NA, df$CS)
+rain = c(log(earlyRain$Field.River + 1), df$CS_Rain)
+
+df_2 = data.frame(Date = dates, SBCS = SeedAbun, CS = plantAbun, CS_Rain = rain)
+df_2$Date = factor(df_2$Date, level = dates)
+
+ggplot(df_2, aes(x = df_2$Date, y = df_2$SBCS, group = 1)) +
+  geom_step(lwd = .75) +
+  geom_line(data = df_2, aes(x = df_2$Date, y = df_2$CS_Rain), color = "blue", lwd = .75) +
+  geom_step(data = df_2, aes(x = df_2$Date, y = df_2$CS), color = "green2", lwd = .75) +
+  geom_vline(xintercept = 5, color = "red", lty = 2, lwd = .75) +
+  xlab("Date") +
+  ylab("Abudnace score, log transformed") +
+  ggtitle("Carlo Shitty Site: Combined seed and plant abundance, log transformed") +
+  geom_text(aes(x = 5, y = 4, label ="Start of Abundance data\n"), angle = 90, size = 5) 
+
+```
+
+#### 2. Combined Field River seed, plant, and rain. Previous 2 years of rain added 
+```{r Combined Field River Graph, warning=FALSE, echo=FALSE}
+df2 = as.data.frame(cbind(FR$AVERAGE_SEED, FR$AVERAGES))
+df2 = as.data.frame(cbind(filteredRain$X1,df2))
+df2 = cbind(df2, filteredRain$`Field River`)
+remove1 = which(is.na(df2$V1))
+remove2 = which(is.na(df2$V2))
+remove_NA = remove1[which(is.element(remove1,remove2))]
+df2 = df2[-remove_NA,]
+colnames(df2) = c("Date","SBFR","FR","FR_Rain")
+df2$SBFR = log(df2$SBFR + 1)
+df2$FR = log(df2$FR + 1)
+df2$FR_Rain = log(df2$FR_Rain + 1)
+
+## 2 extra previous years of rainfall added 
+dates = c(as.character(earlyRain$Date), as.character(df2$Date))
+SeedAbun = c(NA, NA, NA, NA, df2$SBFR)
+plantAbun = c(NA, NA, NA, NA, df2$FR)
+rain = c(log(earlyRain$Field.River + 1), df2$FR_Rain)
+
+df2_2 = data.frame(Date = dates, SBFR = SeedAbun, FR = plantAbun, FR_Rain = rain)
+df2_2$Date = factor(df2_2$Date, level = dates)
+
+ggplot(df2_2, aes(x = df2_2$Date, y = df2_2$SBFR, group = 1)) +
+  geom_step( lwd = .75) +
+  geom_line(data = df2_2, aes(x = df2_2$Date, y = df2_2$FR_Rain), color = "blue", lwd = .75) +
+  geom_step(data = df2_2, aes(x = df2_2$Date, y = df2_2$FR), color = "green2", lwd = .75) +
+  geom_vline(xintercept = 5, color = "red", lty = 2, lwd = .75) +
+  xlab("Date") +
+  ylab("Abudnace score, log transformed") +
+  ggtitle("Field River Site: Combined seed and plant abundance, log transformed") +
+  geom_text(aes(x = 5, y = 4, label ="Start of Abundance data\n"), angle = 90, size = 5) 
+```
+
+
+
+#### 3. Combined Main Camp seed, plant, and rain. Previous 2 years of rain added 
+```{r Combined Main Camp Graph, warning=FALSE, echo=FALSE}
+df3 = as.data.frame(cbind(MC$AVERAGE_SEED, MC$AVERAGES))
+df3 = as.data.frame(cbind(filteredRain$X1,df3))
+df3 = cbind(df3, filteredRain$`Main Camp`)
+remove1 = which(is.na(df3$V1))
+remove2 = which(is.na(df3$V2))
+remove_NA = remove1[which(is.element(remove1,remove2))]
+df3 = df3[-remove_NA,]
+colnames(df3) = c("Date","SBMC","MC","MC_Rain")
+df3$SBMC = log(df3$SBMC + 1)
+df3$MC = log(df3$MC + 1)
+df3$MC_Rain = log(df3$MC_Rain + 1)
+
+## 2 extra previous years of rainfall added 
+dates = c(as.character(earlyRain$Date), as.character(df3$Date))
+SeedAbun = c(NA, NA, NA, NA, df3$SBMC)
+plantAbun = c(NA, NA, NA, NA, df3$MC)
+rain = c(log(earlyRain$Main.Camp + 1), df3$MC_Rain)
+
+df3_2 = data.frame(Date = dates, SBMC = SeedAbun, MC = plantAbun, MC_Rain = rain)
+df3_2$Date = factor(df3_2$Date, level = dates)
+
+ggplot(df3_2, aes(x = df3_2$Date, y = df3_2$SBMC, group = 1)) +
+  geom_step( lwd = .75) +
+  geom_line(data = df3_2, aes(x = df3_2$Date, y = df3_2$MC_Rain), color = "blue", lwd = .75) +
+  geom_step(data = df3_2, aes(x = df3_2$Date, y = df3_2$MC), color = "green2", lwd = .75) +
+  geom_vline(xintercept = 5, color = "red", lty = 2, lwd = .75) +
+  xlab("Date") +
+  ylab("Abudnace score, log transformed") +
+  ggtitle("Main Camp Site: Combined seed and plant abundance, log transformed") +
+  geom_text(aes(x = 5, y = 4, label ="Start of Abundance data\n"), angle = 90, size = 5)
+```
+
+
+#### 4. Combined South Site seed, plant, and rain. Previous 2 years of rain added 
+```{r Combined South Site Graph, warning=FALSE, echo=FALSE}
+df4 = as.data.frame(cbind(SS$AVERAGE_SEED[1:30], SS$AVERAGES[1:30]))
+df4 = as.data.frame(cbind(filteredRain$X1,df4))
+df4 = cbind(df4, filteredRain$`South Site`)
+remove1 = which(is.na(df4$V1))
+remove2 = which(is.na(df4$V2))
+remove_NA = remove1[which(is.element(remove1,remove2))]
+df4 = df4[-remove_NA,]
+colnames(df4) = c("Date","SBSS","SS","SS_Rain")
+df4$SBSS = log(df4$SBSS + 1)
+df4$SS = log(df4$SS + 1)
+df4$SS_Rain = log(df4$SS_Rain + 1)
+
+## 2 extra previous years of rainfall added 
+dates = c(as.character(earlyRain$Date[c(1,3)]), as.character(df4$Date))
+SeedAbun = c(NA, NA, df4$SBSS)
+plantAbun = c(NA, NA, df4$SS)
+rain = c(log(earlyRain$South.Site[c(1,3)] + 1), df4$SS_Rain)
+
+df4_2 = data.frame(Date = dates, SBSS = SeedAbun, SS = plantAbun, SS_Rain = rain)
+df4_2$Date = factor(df4_2$Date, level = dates)
+ggplot(df4_2, aes(x = df4_2$Date, y = df4_2$SBSS, group = 1)) +
+  geom_step( lwd = .75) +
+  geom_line(data = df4_2, aes(x = df4_2$Date, y = df4_2$SS_Rain), color = "blue", lwd = .75) +
+  geom_step(data = df4_2, aes(x = df4_2$Date, y = df4_2$SS), color = "green2", lwd = .75) +
+  geom_vline(xintercept = 3, color = "red", lty = 2, lwd = .75) +
+  xlab("Date") +
+  ylab("Abudnace score, log transformed") +
+  ggtitle("South Site: Combined seed and plant abundance, log transformed") +
+  geom_text(aes(x = 3, y = 4, label ="Start of Abundance data\n"), angle = 90, size = 5)
+```
+
+We then decided to graph these variables but without respect to site.
+
+#### 5. Mean plant and rain. 2 previous rainfall years added. 
+
+```{r Mean Plant and Rain Graph, echo = FALSE, warning=FALSE}
+#filteredRain$X1 = factor(filteredRain$X1, levels = filteredRain$X1)
+combinedRain = rowMeans(filteredRain[,2:5],na.rm = TRUE)
+filteredRain$combined = combinedRain
+
+meanEarlyRain = rowMeans(earlyRain[,2:5], na.rm = TRUE)
+#print(meanEarlyRain)
+combinedRainFall = c(meanEarlyRain, filteredRain$combined)
+date = c(as.character(earlyRain$Date), as.character(CS$Date))
+NewCombinedRain = data.frame(Date = date, combinedRainfall = combinedRainFall, stringsAsFactors = FALSE)
+NewCombinedRain$Date = factor(NewCombinedRain$Date, level = date)
+
+MeanDF_Plant = data.frame(cbind(CS$Date, as.double(filteredRain$combined)), stringsAsFactors = FALSE)
+plant_abundance = data.frame(CS$BURNED_AVERAGE, FR$BURNED_AVERAGE, MC$BURNED_AVERAGE, SS$BURNED_AVERAGE[1:30])
+plant_abundance = plant_abundance %>% rowMeans(na.rm = TRUE) 
+MeanDF_Plant = cbind(MeanDF_Plant, plant_abundance)
+remove = which(is.nan(MeanDF_Plant$plant_abundance))
+MeanDF_Plant = MeanDF_Plant[-remove,]
+colnames(MeanDF_Plant) = c("Date","RainFall","Abundance_BurnedRegions")
+MeanDF_Plant$Date = factor(MeanDF_Plant$Date, levels = MeanDF_Plant$Date)
+
+plantData = c(NA,NA,NA,NA,MeanDF_Plant$Abundance_BurnedRegions)
+date = c(as.character(NewCombinedRain$Date[1:4]),          as.character(NewCombinedRain$Date[which(NewCombinedRain$Date[-c(1:4)] %in% MeanDF_Plant$Date) + 4]))
+indexToKeep = c(c(1,2,3,4), (which(NewCombinedRain$Date[-c(1:4)] %in% MeanDF_Plant$Date) + 4))
+rainFall = NewCombinedRain$combinedRainfall[indexToKeep]
+combinedRainFall_PlantDF = data.frame(Date = date, RainFall = rainFall, PlantAbundance = plantData, stringsAsFactors = FALSE)
+combinedRainFall_PlantDF$Date = factor(combinedRainFall_PlantDF$Date, level = date)
+combinedRainFall_PlantDF$RainFall_Log = log(combinedRainFall_PlantDF$RainFall + 1)
+combinedRainFall_PlantDF$PlantAbundance_Log = log(combinedRainFall_PlantDF$PlantAbundance + 1)
+
+
+
+ggplot(combinedRainFall_PlantDF, aes(x = combinedRainFall_PlantDF$Date, y = combinedRainFall_PlantDF$RainFall_Log, group = 1)) +
+  geom_line(color = "blue", lwd = .75) +
+  geom_step(data = combinedRainFall_PlantDF, aes(x = combinedRainFall_PlantDF$Date, y = combinedRainFall_PlantDF$PlantAbundance_Log), color = "green2", lwd = 1.5) +
+  xlab("Date") +
+  ylab("Combined Mean Plant Abundance and rainfall, log transformed") +
+  ggtitle("The Combined Mean plant abundance and rainfall, log transformed") + 
+  geom_vline(xintercept = 5, color = "red", lty = 2, lwd = .75) +
+  geom_text(aes(x = 5, y = 4, label ="Start of Abundance data\n"), angle = 90, size = 5)
+
+```
+
+
