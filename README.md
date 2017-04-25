@@ -11,3 +11,7 @@ The only difference between these files is that in the Reformated-Data files, al
 ***
 
 An HTML version of the R Markdown is provided so those interested in the analysis process can view the results. For those who are interested in recreating every step of the process, see the .Rmd file as some of the code is not shown in the HMTL version for viewing ease (primarily the code for creating the combined graphs).
+
+***
+
+The completed report is available for your viewing here as well.
